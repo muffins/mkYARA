@@ -3,9 +3,13 @@ from mkyara import (
     YaraGenerator,
 )
 from capstone import (
+    CS_ARCH_ARM,
+    CS_ARCH_ARM64,
     CS_ARCH_X86,
     CS_MODE_32,
     CS_MODE_64,
+    CS_MODE_ARM,
+    CS_MODE_THUMB,
 )
 import binascii
 import sys
@@ -18,13 +22,18 @@ log = logging.getLogger(__package__)
 
 
 INSTRUCTION_SET_MAPPING = {
-    'x86': CS_ARCH_X86,
+    "x86": CS_ARCH_X86,
+    "arm": CS_ARCH_ARM,
+    "arm64": CS_ARCH_ARM64,
 }
+
 INSTRUCTION_MODE_MAPPING = {
-    '32': CS_MODE_32,
-    '64': CS_MODE_64,
-    'x86': CS_MODE_32,
-    'x64': CS_MODE_64,
+    "32": CS_MODE_32,
+    "64": CS_MODE_64,
+    "x86": CS_MODE_32,
+    "x64": CS_MODE_64,
+    "arm": CS_MODE_ARM,
+    "thumb": CS_MODE_THUMB,
 }
 
 
@@ -46,34 +55,85 @@ def sha256_hash(path):
 def main():
     instr_set_keys = list(INSTRUCTION_SET_MAPPING.keys())
     instr_mode_keys = list(INSTRUCTION_MODE_MAPPING.keys())
-    parser = argparse.ArgumentParser(description='Generate a Yara rule based on disassembled code', formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument('-i', '--instruction_set', type=str, help='Instruction set', choices=instr_set_keys, default=instr_set_keys[0])
-    parser.add_argument('-a', '--instruction_mode', type=str, help='Instruction mode', choices=instr_mode_keys, default=instr_mode_keys[0])
+    parser = argparse.ArgumentParser(
+        description="Generate a Yara rule based on disassembled code",
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
+    parser.add_argument(
+        "-i",
+        "--instruction_set",
+        type=str,
+        help="Instruction set",
+        choices=instr_set_keys,
+        default=instr_set_keys[0],
+    )
+    parser.add_argument(
+        "-a",
+        "--instruction_mode",
+        type=str,
+        help="Instruction mode",
+        choices=instr_mode_keys,
+        default=instr_mode_keys[0],
+    )
 
-    parser.add_argument('-f', '--file_path', type=str, help='Sample file path', required=True)
-    parser.add_argument('-n', '--rulename', type=str, help='Generated rule name', default="generated_rule")
-    parser.add_argument('-o', '--offset', type=auto_int, help='File offset for signature', required=True)
-    parser.add_argument('-s', '--size', type=auto_int, help='Size of desired signature', required=True)
-    parser.add_argument('-m', '--mode', type=str, help="""Wildcard mode for yara rule generation\nloose = wildcard all operands\nnormal = wildcard only displacement operands\nstrict = wildcard only jmp/call addresses""", required=False, choices=["loose", "normal", "strict"], default="normal")
-    parser.add_argument('-r', '--result', type=argparse.FileType('w'), help='Output file', required=False, default=None)
-    parser.add_argument("-v", "--verbose", action="count", default=0, help="Increase verbosity")
+    parser.add_argument(
+        "-f", "--file_path", type=str, help="Sample file path", required=True
+    )
+    parser.add_argument(
+        "-n",
+        "--rulename",
+        type=str,
+        help="Generated rule name",
+        default="generated_rule",
+    )
+    parser.add_argument(
+        "-o", "--offset", type=auto_int, help="File offset for signature", required=True
+    )
+    parser.add_argument(
+        "-s", "--size", type=auto_int, help="Size of desired signature", required=True
+    )
+    parser.add_argument(
+        "-m",
+        "--mode",
+        type=str,
+        help="""Wildcard mode for yara rule generation\nloose = wildcard all operands\nnormal = wildcard only displacement operands\nstrict = wildcard only jmp/call addresses""",
+        required=False,
+        choices=["loose", "normal", "strict"],
+        default="normal",
+    )
+    parser.add_argument(
+        "-r",
+        "--result",
+        type=argparse.FileType("w"),
+        help="Output file",
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
+        "-v", "--verbose", action="count", default=0, help="Increase verbosity"
+    )
     args = parser.parse_args()
 
     levels = [logging.WARNING, logging.INFO, logging.DEBUG]
     level = levels[min(len(levels) - 1, args.verbose)]
-    logging.basicConfig(stream=sys.stderr, level=level, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    logging.basicConfig(
+        stream=sys.stderr,
+        level=level,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
 
     log.info("Disassembling code and generating signature...")
     ins_set = INSTRUCTION_SET_MAPPING[args.instruction_set]
     ins_mode = INSTRUCTION_MODE_MAPPING[args.instruction_mode]
+
     yr_gen = YaraGenerator(args.mode, ins_set, ins_mode, rule_name=args.rulename)
-    with open(args.file_path, 'rb') as file:
+    with open(args.file_path, "rb") as file:
         file.seek(args.offset)
         data = file.read(args.size)
         yr_gen.add_chunk(data, args.offset)
 
     yr_rule = yr_gen.generate_rule()
-    yr_rule.metas["sample"] = "\"{}\"".format(sha256_hash(args.file_path))
+    yr_rule.metas["sample"] = '"{}"'.format(sha256_hash(args.file_path))
 
     log.info("Creating Yara rule...")
     yr_rule_str = yr_rule.get_rule_string()

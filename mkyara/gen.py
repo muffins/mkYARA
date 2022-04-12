@@ -22,7 +22,7 @@ None!?
 """
 
 IMAGE_FILE_MACHINE_AMD64 = 0x8664
-IMAGE_FILE_MACHINE_I386 = 0x014c
+IMAGE_FILE_MACHINE_I386 = 0x014C
 log = logging.getLogger(__package__)
 
 
@@ -34,7 +34,14 @@ class DataChunk(object):
 
 
 class YaraGenerator(object):
-    def __init__(self, sig_mode, instruction_set, instruction_mode, rule_name="generated_rule", do_comment=True):
+    def __init__(
+        self,
+        sig_mode,
+        instruction_set,
+        instruction_mode,
+        rule_name="generated_rule",
+        do_comment=True,
+    ):
         self.instruction_set = instruction_set
         self.instruction_mode = instruction_mode
         self.do_comment_sig = do_comment
@@ -48,11 +55,11 @@ class YaraGenerator(object):
         self._chunks.append(DataChunk(data, offset=offset, is_data=is_data))
 
     def _hex_opcode(self, opcode_list):
-        """ Returns a HEX string representation of the Capstone opcode list """
-        return ' '.join(format(x, '02x').upper() for x in opcode_list if x != 0)
+        """Returns a HEX string representation of the Capstone opcode list"""
+        return " ".join(format(x, "02x").upper() for x in opcode_list if x != 0)
 
     def _get_opcode_size(self, opcode_list):
-        """ Count the number of opcodes in the Capstone opcode list """
+        """Count the number of opcodes in the Capstone opcode list"""
         result = 0
         for bt in opcode_list:
             if bt != 0:
@@ -65,8 +72,11 @@ class YaraGenerator(object):
         return data
 
     def _process_instruction(self, ins):
-        """ Process an instruction of the binary, generating a pattern/signature for it """
+        """Process an instruction of the binary, generating a pattern/signature for it"""
         ins_str = "{} {}".format(ins.mnemonic, ins.op_str)
+        log.info(f"Ins Str: {ins_str}")
+        log.info(f"Ins Str: {ins.__str__()}")
+
         opcode_hex_str = self._hex_opcode(ins.opcode)
         opcode_size = self._get_opcode_size(ins.opcode)
         operand_total_size = len(ins.bytes) - opcode_size
@@ -88,11 +98,15 @@ class YaraGenerator(object):
         ins_hex_list = list(ins_hex)
 
         if self.should_wildcard_imm_operand(ins):
-            ins_hex_list = self._wilcard_bytes(ins_hex_list, ins.imm_offset * 2, ins.imm_size * 2)
+            ins_hex_list = self._wilcard_bytes(
+                ins_hex_list, ins.imm_offset * 2, ins.imm_size * 2
+            )
         if self.should_wildcard_disp_operand(ins):
-            ins_hex_list = self._wilcard_bytes(ins_hex_list, ins.disp_offset * 2, ins.disp_size * 2)
+            ins_hex_list = self._wilcard_bytes(
+                ins_hex_list, ins.disp_offset * 2, ins.disp_size * 2
+            )
 
-        signature = ''.join(ins_hex_list)
+        signature = "".join(ins_hex_list)
         return signature, ins_comment
 
     def is_jmp_or_call(self, ins):
@@ -116,20 +130,26 @@ class YaraGenerator(object):
 
     def format_hex(self, data):
         n = 2
-        return " ".join([data[i:i + n] for i in range(0, len(data), n)])
+        return " ".join([data[i : i + n] for i in range(0, len(data), n)])
 
     def generate_rule(self):
-        """ Generate Yara rule. Return a YaraRule object """
+        """Generate Yara rule. Return a YaraRule object"""
         self.yr_rule.rule_name = self.rule_name
-        self.yr_rule.metas["generated_by"] = "\"mkYARA - By Jelle Vergeer\""
-        self.yr_rule.metas["date"] = "\"{}\"".format(datetime.now().strftime("%Y-%m-%d %H:%M"))
-        self.yr_rule.metas["version"] = "\"1.0\""
+        self.yr_rule.metas["generated_by"] = '"mkYARA - By Jelle Vergeer"'
+        self.yr_rule.metas["date"] = '"{}"'.format(
+            datetime.now().strftime("%Y-%m-%d %H:%M")
+        )
+        self.yr_rule.metas["version"] = '"1.0"'
+
+        if self.instruction_set is None or self.instruction_mode is None:
+            log.error("[-] The architecture appears to not be supported.")
+            return
 
         md = Cs(self.instruction_set, self.instruction_mode)
         md.detail = True
         md.syntax = CS_OPT_SYNTAX_INTEL
         chunk_nr = 0
-
+        log.info(f"Processing {len(self._chunks)} chunks")
         for chunk in self._chunks:
             chunk_nr += 1
             chunk_id = "$chunk_{}".format(chunk_nr)
