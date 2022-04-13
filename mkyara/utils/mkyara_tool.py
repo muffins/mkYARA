@@ -18,7 +18,12 @@ import argparse
 import logging
 import hashlib
 
-log = logging.getLogger(__package__)
+import coloredlogs
+
+LOGGING_LEVEL = logging.INFO
+coloredlogs.install(level=LOGGING_LEVEL, datefmt="%Y-%m-%dT%H:%M:%S%z")
+log = logging.getLogger("mkyara")
+log.setLevel(LOGGING_LEVEL)
 
 
 INSTRUCTION_SET_MAPPING = {
@@ -116,11 +121,7 @@ def main():
 
     levels = [logging.WARNING, logging.INFO, logging.DEBUG]
     level = levels[min(len(levels) - 1, args.verbose)]
-    logging.basicConfig(
-        stream=sys.stderr,
-        level=level,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
+    log.setLevel(level)
 
     log.info("Disassembling code and generating signature...")
     ins_set = INSTRUCTION_SET_MAPPING[args.instruction_set]
@@ -130,8 +131,9 @@ def main():
     with open(args.file_path, "rb") as file:
         file.seek(args.offset)
         data = file.read(args.size)
-        yr_gen.add_chunk(data, args.offset)
+        yr_gen.add_chunk(data, args.size)
 
+    log.info("Generating rules")
     yr_rule = yr_gen.generate_rule()
     yr_rule.metas["sample"] = '"{}"'.format(sha256_hash(args.file_path))
 
