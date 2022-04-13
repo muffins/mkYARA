@@ -14,6 +14,7 @@ from capstone import (
     CS_MODE_32,
     CS_MODE_64,
     CS_MODE_ARM,
+    CS_MODE_THUMB,
 )
 from PyQt5 import QtGui, QtWidgets
 from PyQt5.QtCore import Qt
@@ -22,6 +23,15 @@ INSTRUCTION_SET_MAPPING = {
     "metapc": CS_ARCH_X86,
     "arm": CS_ARCH_ARM,
     "arm64": CS_ARCH_ARM64,
+}
+
+INSTRUCTION_MODE_MAPPING = {
+    "32": CS_MODE_32,
+    "64": CS_MODE_64,
+    "x86": CS_MODE_32,
+    "x64": CS_MODE_64,
+    "arm": CS_MODE_ARM,
+    "thumb": CS_MODE_THUMB,
 }
 
 
@@ -189,7 +199,7 @@ class mkYARAPlugin(idaapi.plugin_t):
         data = idaapi.get_bytes(start, size)
         ins_set, ins_mode = get_arch_info()
         yr_gen = YaraGenerator(mode, ins_set, ins_mode)
-        yr_gen.add_chunk(data, offset=start, is_data=is_data)
+        yr_gen.add_chunk(data, length=size, is_data=is_data)
         rule_obj = yr_gen.generate_rule()
         file_hash = get_input_file_hash()
         rule_obj.metas["hash"] = '"{}"'.format(file_hash)
